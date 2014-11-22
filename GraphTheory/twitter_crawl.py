@@ -45,13 +45,16 @@ def data_scientist_names():
     #         "Hadley Wickham"]
 
     # Start with this
-    return ["Aaron Palumbo"]
+    return ["Hilary Mason"]
 
 
 def add_to_user_dictionary(kwargs, api, user_dict):
     # kwargs is a dictionary with the appropriate user identification
-    user = api.GetUser(**kwargs)
-    user_dict[user.id] = user
+    try:
+        user = api.GetUser(**kwargs)
+        user_dict[user.id] = user
+    except twitter.TwitterError:
+        print "error getting user info"
 
 
 def provide_user_seeds(names, api):
@@ -61,8 +64,7 @@ def provide_user_seeds(names, api):
                   "DJ Patil": "dpatil",
                   "Hilary Mason": "hmason",
                   "Drew Conway": "drewconway",
-                  "Hadley Wickham": "hadleywickham",
-                  "Aaron Palumbo": "aaronpalumbo"}      # Need something short to test with =-)
+                  "Hadley Wickham": "hadleywickham"}
     # TODO: add case checking. e.g. hilary matches HilArY
     return [api.GetUser(screen_name=translator[n]).id for n in names]
 
@@ -82,12 +84,14 @@ def get_ds_community():
 
 
 def crawl_ds_community(user_seeds, ds_community, user_dict, api):
+    # TODO: keep track of IDs that cause errors and skip those
     # Produce a dictionary in the form {member_id: [list of friends ids]}
 
     # Initiate list to be crawled
     to_crawl = user_seeds
 
     counter = 0
+    follower_errors = 0
     while len(to_crawl) > 0:
         user_id = to_crawl.pop()
 
@@ -96,13 +100,20 @@ def crawl_ds_community(user_seeds, ds_community, user_dict, api):
             add_to_user_dictionary(kw, api, user_dict)
 
         if user_id not in ds_community.keys():
-            follows = api.GetFriendIDs(user_id=user_id)
-            ds_community[user_id] = follows
-            to_crawl = to_crawl + [id for id in follows if id not in to_crawl]
+            try:
+                follows = api.GetFriendIDs(user_id=user_id)
+                ds_community[user_id] = follows
+                to_crawl = to_crawl + [id for id in follows if id not in ds_community.keys()]
+            except twitter.TwitterError:
+                follower_errors += 1
+        else:
+            follows = ds_community[user_id]
+            to_crawl = to_crawl + [id for id in follows if id not in ds_community.keys()]
 
-        if counter == 10:
+        if counter >= 100:
             saveobject(ds_community, "ds_community")
             saveobject(user_dict, "user_dict")
+            print "there were {} errors in getting twitter followers".format(follower_errors)
             break
 
         counter += 1
@@ -120,10 +131,10 @@ def main():
     # Get user_ids for community kernel
     user_seeds = provide_user_seeds(scientists, api)
 
-    # Initiate dictionary of user information
+    # Load or initialize dictionary of user information
     user_dict = get_user_dict()
 
-    # Initiate ds_community link dictionary
+    # Load or initialize ds_community link dictionary
     ds_community = get_ds_community()
 
     # Crawl twitter for structure
@@ -131,6 +142,9 @@ def main():
 
     print ds_community
     print user_dict
+
+    saveobject(ds_community, "ds_community")
+    saveobject(user_dict, "user_dict")
 
 
 if __name__ == "__main__":
