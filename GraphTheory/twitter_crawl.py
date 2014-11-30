@@ -48,13 +48,30 @@ def data_scientist_names():
     return ["Hilary Mason"]
 
 
-def add_to_user_dictionary(kwargs, api, user_dict):
-    # kwargs is a dictionary with the appropriate user identification
-    try:
-        user = api.GetUser(**kwargs)
-        user_dict[user.id] = user
-    except twitter.TwitterError:
-        print "error getting user info"
+def add_to_user_dictionary(user_id, user_dict, api):
+    if user_id in user_dict.keys():
+        # TODO: Fix counter ...
+        # This doesn't work right if working from copy
+        # Saved to Disk
+        user_dict[user_id]['count'] += 1
+    else:
+        user_dict[user_id] = {
+            'count': 1,
+            'twit_ob': api.GetUser(user_id=user_id)
+        }
+
+
+def add_to_ds_community(user_id, ds_community, api):
+    if user_id in ds_community.keys():
+        # TODO: Fix counter ...
+        # This doesn't work right if working from copy
+        # Saved to Disk
+        ds_community[user_id]['count'] += 1
+    else:
+        ds_community[user_id] = {
+            'count': 1,
+            'follows': api.GetFriendIDs(user_id=user_id)
+        }
 
 
 def provide_user_seeds(names, api):
@@ -83,42 +100,42 @@ def get_ds_community():
         return {}
 
 
-def crawl_ds_community(user_seeds, ds_community, user_dict, api):
-    # TODO: keep track of IDs that cause errors and skip those
-    # Produce a dictionary in the form {member_id: [list of friends ids]}
+def get_id_errors():
+    try:
+        return readobject("id_errors")
+    except IOError:
+        return []
 
+
+def crawl_ds_community(user_seeds, ds_community, user_dict, id_errors, api):
     # Initiate list to be crawled
     to_crawl = user_seeds
 
     counter = 0
-    follower_errors = 0
+    twitter_errors = 0
     while len(to_crawl) > 0:
         user_id = to_crawl.pop()
 
-        if user_id not in user_dict.keys():
-            kw = {"user_id": user_id}
-            add_to_user_dictionary(kw, api, user_dict)
-
-        if user_id not in ds_community.keys():
+        if user_id not in id_errors:
             try:
-                follows = api.GetFriendIDs(user_id=user_id)
-                ds_community[user_id] = follows
-                to_crawl = to_crawl + [id for id in follows if id not in ds_community.keys()]
+                add_to_user_dictionary(user_id, user_dict, api)
+                add_to_ds_community(user_id, ds_community, api)
+                to_crawl = to_crawl + \
+                           [id for id in ds_community[user_id]['follows'] if id not in ds_community.keys()]
             except twitter.TwitterError:
-                follower_errors += 1
-        else:
-            follows = ds_community[user_id]
-            to_crawl = to_crawl + [id for id in follows if id not in ds_community.keys()]
+                if user_id in user_dict.keys():
+                    del user_dict[user_id]
+                id_errors.append(user_id)
+                twitter_errors += 1
 
-        if counter >= 100:
+        if counter >= 50:
             saveobject(ds_community, "ds_community")
             saveobject(user_dict, "user_dict")
-            print "there were {} errors in getting twitter followers".format(follower_errors)
+            print "there were {} errors in getting twitter followers".format(twitter_errors)
+            print "there were {} more user ids in the to_crawl list".format(len(to_crawl))
             break
 
         counter += 1
-
-    return ds_community, user_dict
 
 
 def main():
@@ -137,8 +154,14 @@ def main():
     # Load or initialize ds_community link dictionary
     ds_community = get_ds_community()
 
+    # Load or initialize list of user ids that cause errors
+    id_errors = get_id_errors()
+
     # Crawl twitter for structure
-    ds_community, user_dict = crawl_ds_community(user_seeds, ds_community, user_dict, api)
+    crawl_ds_community(user_seeds,
+                       ds_community, user_dict,
+                       id_errors,
+                       api)
 
     print ds_community
     print user_dict
