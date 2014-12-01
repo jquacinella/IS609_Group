@@ -42,6 +42,16 @@ def authenticate():
     return api
 
 
+def get_depth_stats(depth_target):
+    try:
+        ds = readobject("depth_stats")
+        ds['target'] = depth_target
+        return ds
+    except IOError:
+        return {'current': 0,
+                'target': depth_target}
+
+
 def get_to_crawl(api):
     try:
         return readobject("to_crawl")
@@ -51,6 +61,13 @@ def get_to_crawl(api):
 
         # Get user_ids for community kernel
         return provide_user_seeds(scientists, api)
+
+
+def get_next_level_crawl():
+    try:
+        return readobject("next_level_crawl")
+    except IOError:
+        return []
 
 
 def data_scientist_names():
@@ -125,7 +142,50 @@ def extend_to_crawl(to_crawl, user_id, ds_community):
     )
 
 
-def crawl_ds_community(to_crawl, ds_community, user_dict, id_errors, api):
+def crawl_ds_community(depth_target, api):
+        # Load or initialize depth_stats
+        depth_stats = get_depth_stats(depth_target)
+
+        # Load or initialize to_crawl list
+        to_crawl = get_to_crawl(api)
+
+        # Load or initialize next_level_crawl
+        next_level_crawl = get_next_level_crawl()
+
+        # Load or initialize dictionary of user information
+        user_dict = get_user_dict()
+
+        # Load or initialize ds_community link dictionary
+        ds_community = get_ds_community()
+
+        # Load or initialize list of user ids that cause errors
+        id_errors = get_id_errors()
+
+        # Crawl ....
+        while depth_stats['current'] <= depth_stats['target']:
+            saveobject(depth_stats, "depth_stats")
+            crawl_specified_depth(to_crawl, next_level_crawl,
+                                  ds_community,
+                                  user_dict,
+                                  id_errors,
+                                  api)
+            depth_stats['current'] += 1
+            to_crawl = next_level_crawl
+            next_level_crawl = []
+            depth_stats[depth_stats['current']] = to_crawl
+
+        saveobject(ds_community, "ds_community")
+        saveobject(user_dict, "user_dict")
+        saveobject(to_crawl, "to_crawl")
+        saveobject(id_errors, "id_errors")
+        saveobject(depth_stats, "depth_stats")
+
+
+def crawl_specified_depth(to_crawl, next_level_crawl,
+                          ds_community,
+                          user_dict,
+                          id_errors,
+                          api):
 
     counter = 0
     twitter_errors = 0
@@ -161,7 +221,7 @@ def crawl_ds_community(to_crawl, ds_community, user_dict, id_errors, api):
             else:
                 add_to_user_dictionary(user_id, user_dict, user)
                 add_to_ds_community(user_id, ds_community, follows)
-                extend_to_crawl(to_crawl, user_id, ds_community)
+                next_level_crawl.extend(follows)
 
         if counter % 15 == 0:
             # Heartbeat: feedback to show things are progressing
@@ -170,6 +230,7 @@ def crawl_ds_community(to_crawl, ds_community, user_dict, id_errors, api):
             saveobject(ds_community, "ds_community")
             saveobject(user_dict, "user_dict")
             saveobject(to_crawl, "to_crawl")
+            saveobject(next_level_crawl, "next_level_crawl")
             saveobject(id_errors, "id_errors")
             print 'files saved'
 
@@ -182,31 +243,14 @@ def crawl_ds_community(to_crawl, ds_community, user_dict, id_errors, api):
 
 
 def main():
+    # Set Depth Target
+    depth_target = 3
+
     # Authenticate
     api = authenticate()
 
-    # Load or initialize to_crawl list
-    to_crawl = get_to_crawl(api)
-
-    # Load or initialize dictionary of user information
-    user_dict = get_user_dict()
-
-    # Load or initialize ds_community link dictionary
-    ds_community = get_ds_community()
-
-    # Load or initialize list of user ids that cause errors
-    id_errors = get_id_errors()
-
     # Crawl twitter for structure
-    crawl_ds_community(to_crawl,
-                       ds_community, user_dict,
-                       id_errors,
-                       api)
-
-    saveobject(ds_community, "ds_community")
-    saveobject(user_dict, "user_dict")
-    saveobject(to_crawl, "to_crawl")
-    saveobject(id_errors, "id_errors")
+    crawl_ds_community(depth_target, api)
 
 
 if __name__ == "__main__":
