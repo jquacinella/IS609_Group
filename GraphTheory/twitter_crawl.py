@@ -8,6 +8,7 @@ import twitter
 import cPickle as pickle
 import os
 from time import sleep
+from datetime import datetime
 
 
 def saveobject(obj, filename):
@@ -144,10 +145,15 @@ def crawl_ds_community(to_crawl, ds_community, user_dict, id_errors, api):
                     follows = ds_community[user_id]['follows']
 
             except twitter.TwitterError as error_text:
-                if error_text[0][0]['code'] == 88:
+                if (type(error_text.message[0]) is dict and
+                        'message' in error_text.message[0].keys() and
+                        error_text.message[0]['message'] == 'Rate limit exceeded'):
                     # Exceeded limits (15/15 minutes):
                     # Add user_id back onto to_crawl and wait
                     to_crawl.append(user_id)
+                    print datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    print "counter = {0}".format(counter)
+                    print 'Rate limit exceeded. Sleep 15'
                     sleep(60*5)     # seconds to pause
                 else:
                     id_errors.append(user_id)
@@ -157,7 +163,17 @@ def crawl_ds_community(to_crawl, ds_community, user_dict, id_errors, api):
                 add_to_ds_community(user_id, ds_community, follows)
                 extend_to_crawl(to_crawl, user_id, ds_community)
 
-        if counter >= 5:
+        if counter % 15 == 0:
+            # Heartbeat: feedback to show things are progressing
+            print datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            print "counter = {0}".format(counter)
+            saveobject(ds_community, "ds_community")
+            saveobject(user_dict, "user_dict")
+            saveobject(to_crawl, "to_crawl")
+            saveobject(id_errors, "id_errors")
+            print 'files saved'
+
+        if counter >= 60*2:
             print "there were {} errors in getting twitter followers".format(twitter_errors)
             print "there were {} more user ids in the to_crawl list".format(len(to_crawl))
             break
@@ -190,6 +206,7 @@ def main():
     saveobject(ds_community, "ds_community")
     saveobject(user_dict, "user_dict")
     saveobject(to_crawl, "to_crawl")
+    saveobject(id_errors, "id_errors")
 
 
 if __name__ == "__main__":
