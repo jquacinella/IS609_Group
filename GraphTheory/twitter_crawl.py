@@ -10,6 +10,8 @@ import os
 from time import sleep
 from datetime import datetime
 
+from config import *
+
 
 def saveobject(obj, filename):
     """Shortcut to save file"""
@@ -35,10 +37,10 @@ def readobject(filename):
 def authenticate():
     # Twitter credentials
     # Connect to twitter API using custom Twitter APP and Oauth tokens from 'mrquintopolous'
-    api = twitter.Api(consumer_key='AjU9aXjAVGnAStPSXcpKuL9fJ',
-                      consumer_secret='JF2Xc6uNfAW0NroCBtqlT860V6pWWPVmm0MI9RmTuCR6jmMdr0',
-                      access_token_key='16562593-NYrbJNK8w1cd5aujWhJUoTfGz6MR3Y5u7Xa1WdbCh',
-                      access_token_secret='N5KPbswRrjWPFaOIkaFNmVGAWgHeg1bIZafJPXoBa29Rc')
+    api = twitter.Api(consumer_key=CONSUMER_KEY,
+                      consumer_secret=CONSUMER_SECRET,
+                      access_token_key=ACCESS_TOKEN_KEY,
+                      access_token_secret=ACCESS_TOKEN_SECRET)
     return api
 
 
