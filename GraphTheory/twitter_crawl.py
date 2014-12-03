@@ -72,6 +72,27 @@ def get_next_level_crawl():
         return []
 
 
+def get_user_dict():
+    try:
+        return readobject("user_dict")
+    except IOError:
+        return {}
+
+
+def get_ds_community():
+    try:
+        return readobject("ds_community")
+    except IOError:
+        return {}
+
+
+def get_id_errors():
+    try:
+        return readobject("id_errors")
+    except IOError:
+        return []
+
+
 def data_scientist_names():
     # Provide a seed list for the data science community
     # Not directly providing twitter ids in case we want
@@ -115,33 +136,6 @@ def add_to_ds_community(user_id, ds_community, follows):
             'count': 1,
             'follows': follows
         }
-
-
-def get_user_dict():
-    try:
-        return readobject("user_dict")
-    except IOError:
-        return {}
-
-
-def get_ds_community():
-    try:
-        return readobject("ds_community")
-    except IOError:
-        return {}
-
-
-def get_id_errors():
-    try:
-        return readobject("id_errors")
-    except IOError:
-        return []
-
-
-def extend_to_crawl(to_crawl, user_id, ds_community):
-    to_crawl.extend(
-        [uid for uid in ds_community[user_id]['follows'] if uid not in ds_community.keys()]
-    )
 
 
 def crawl_ds_community(depth_target, api):
@@ -190,7 +184,6 @@ def crawl_specified_depth(to_crawl, next_level_crawl,
                           api):
 
     counter = 0
-    twitter_errors = 0
     while len(to_crawl) > 0:
         user_id = to_crawl.pop()
 
@@ -215,11 +208,10 @@ def crawl_specified_depth(to_crawl, next_level_crawl,
                     to_crawl.append(user_id)
                     print datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     print "counter = {0}".format(counter)
-                    print 'Rate limit exceeded. Sleep 15'
+                    print 'Rate limit exceeded. Sleep 5'
                     sleep(60*5)     # seconds to pause
                 else:
                     id_errors.append(user_id)
-                    twitter_errors += 1
             else:
                 add_to_user_dictionary(user_id, user_dict, user)
                 add_to_ds_community(user_id, ds_community, follows)
@@ -235,11 +227,6 @@ def crawl_specified_depth(to_crawl, next_level_crawl,
             saveobject(next_level_crawl, "next_level_crawl")
             saveobject(id_errors, "id_errors")
             print 'files saved'
-
-        if counter >= 60*2:
-            print "there were {} errors in getting twitter followers".format(twitter_errors)
-            print "there were {} more user ids in the to_crawl list".format(len(to_crawl))
-            break
 
         counter += 1
 
