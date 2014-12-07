@@ -38,18 +38,24 @@ pointGame <- function(tennis_data, server, court, serve_num) {
 
 
 #Exclude faults, lets and center serves
-tennisIn <- subset(tennis, Fault==0 & Note!="L" & Note!="C")
+tennisIn <- subset(tennis, Fault==0 & Note!="L" & Note!= "Let" & Note!="C")
 
-#Calculate results for both servers, both sides
+#Calculate results for both servers, both sides: function (dataset, server, court, serveNum)
 ps1d <- pointGame(tennisIn, "PS", "D", "1")
 ps1a <- pointGame(tennisIn, "PS", "A", "1")
 aa1d <- pointGame(tennisIn, "AA", "D", "1")
 aa1a <- pointGame(tennisIn, "AA", "A", "1")
 
-result <- rbind(ps1d, ps1a, aa1d, aa1a)
-print(result)
+result_1serve <- rbind(ps1d, ps1a, aa1d, aa1a)
+print(result_1serve)
 
+ps2d <- pointGame(tennisIn, "PS", "D", "2")
+ps2a <- pointGame(tennisIn, "PS", "A", "2")
+aa2d <- pointGame(tennisIn, "AA", "D", "2")
+aa2a <- pointGame(tennisIn, "AA", "A", "2")
 
+result_2serve <- rbind(ps2d, ps2a, aa2d, aa2a)
+print(result_2serve)
 
 
 
