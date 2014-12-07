@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from helpers import *
 import random
 
+import numpy as np
 
 def create_test_object(user_dict, size=3):
     # Set some parameters
@@ -24,7 +25,10 @@ def create_test_object(user_dict, size=3):
         # Filter this so the node does not follow itself
         follows = [i for i in follows if i != current_id]
 
-        test_object[current_id] = {'name': user_dict[current_id]['twit_ob'].name,
+        # test_object[current_id] = {'name': user_dict[current_id]['twit_ob'].name,
+        #                            'count': random.choice(count_options),
+        #                            'follows': follows}
+        test_object[current_id] = {'name': user_dict[current_id]['name'],
                                    'count': random.choice(count_options),
                                    'follows': follows}
     # Print out the test object for comparison to generated graph
@@ -42,12 +46,20 @@ def graph_construction(graph_info, user_dict, size=None):
         size = len(user_dict.keys())
 
     # Get a random sample of size=size to plot
-    random.seed(425)  # For consistency while experimenting
-    uids_in_graph = random.sample(user_dict.keys(), size)
+    # random.seed(425)  # For consistency while experimenting
+    # uids_in_graph = random.sample(user_dict_filtered.keys(), size)
+    
+    # Filter out nodes that have low counts
+    user_dict_filtered = {}
+    for uid in user_dict:
+        if user_dict[uid]['count'] >= 2:
+            user_dict_filtered[uid] = user_dict[uid]
+
+    uids_in_graph = user_dict_filtered.keys()
 
     # Add nodes to graph
     for uid in uids_in_graph:
-        g.add_node(uid, {'handle': user_dict[uid]['twit_ob'].name})
+        g.add_node(uid, {'handle': user_dict_filtered[uid]['name']})
 
     # Add edges to graph
     for uid in uids_in_graph:
@@ -58,24 +70,51 @@ def graph_construction(graph_info, user_dict, size=None):
     # Get label info
     node_labels = nx.get_node_attributes(g, 'handle')
 
-    # Plot
-    plt.figure(figsize=(10, 10))
+    # Find the in degree of each node
+    degree = g.in_degree()
 
-    pos = nx.spring_layout(g)
-    nx.draw(g, pos, arrows=True)
-    nx.draw_networkx_labels(g, pos, labels=node_labels)
-
+    # Plot graph with spring layout
+    fig = plt.figure(figsize=(10, 10), facecolor='black')
+    pos_spring = nx.spring_layout(g)
+    nx.draw(g, pos_spring, arrows=True, with_labels=False, node_size=[v * 4 for v in degree.values()])
+    nx.draw_networkx_labels(g, pos_spring, labels=node_labels, font_weight='bold', font_size=11, font_color="white")
+    plt.savefig('spring_layout.png', facecolor='grey')
     plt.show()
+
+    # Plot new graph with shell layout
+    fig = plt.figure(figsize=(10, 10))
+
+    # Shell calculations
+    shell1 = []; shell2 = []; shell3 = [];
+    for uid in user_dict_filtered:
+        if degree[uid] < 50:
+            shell1.append(uid)
+        elif degree[uid] >= 50 and degree[uid] < 100:
+            shell2.append(uid)
+        elif degree[uid] >= 100:
+            shell3.append(uid)
+    shells = [shell3, shell2, shell1]
+    pos_shell = nx.shell_layout(g, nlist=shells)
+
+    # Draw graph and labels
+    nx.draw(g, pos_shell, arrows=True, with_labels=False)#, node_size=[v * 4 for v in degree.values()])
+    nx.draw_networkx_labels(g, pos_shell, labels=node_labels, font_weight='bold', font_size=11, font_color="white")
+
+    # Print figure
+    plt.savefig('shell_layout.png', facecolor='grey')
+    plt.show()
+    
+
 
 
 def main():
     global DEBUG
     DEBUG = False
 
-    object_location = 'twitter_objects'
+    object_location = 'twitter_crawl_objects'
     nodes_to_plot = 100
 
-    user_dict = readobject('user_dict', dir_flag=False, alt_dir=object_location)
+    user_dict = readobject('user_name', dir_flag=False, alt_dir=object_location)
 
     if DEBUG:
         nodes_to_plot = 10
