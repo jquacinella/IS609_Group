@@ -73,6 +73,8 @@ def graph_construction(graph_info, user_dict, size=None):
     # Find the in degree of each node
     degree = g.in_degree()
 
+    pickle.dump(g, open('graph_object', 'wb'), pickle.HIGHEST_PROTOCOL)
+
     # Plot graph with spring layout
     fig = plt.figure(figsize=(10, 10), facecolor='black')
     pos_spring = nx.spring_layout(g)
@@ -89,9 +91,9 @@ def graph_construction(graph_info, user_dict, size=None):
     for uid in user_dict_filtered:
         if degree[uid] < 50:
             shell1.append(uid)
-        elif degree[uid] >= 50 and degree[uid] < 100:
+        elif degree[uid] >= 50 and degree[uid] < 90:
             shell2.append(uid)
-        elif degree[uid] >= 100:
+        elif degree[uid] >= 90:
             shell3.append(uid)
     shells = [shell3, shell2, shell1]
     pos_shell = nx.shell_layout(g, nlist=shells)
