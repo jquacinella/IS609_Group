@@ -1,0 +1,151 @@
+---
+title: "Documentation"
+author: "Aaron Palumbo"
+date: "Monday, December 08, 2014"
+output: html_document
+---
+```{r}
+library(ggplot2)
+library(reshape2)
+```
+
+Generate figures to help explain game theory analysis
+
+We want to take a look at a tennis match from the perspective of game theory. In order to do this we will make some simplifying assumptions.
+
+1. The main factor in determining the winner of a point is where the serve is placed
+2. There are two distince scenarios that present two distince games:
+
+* Deuce-court
+    + Server has choice of servine left or right
+    + Receiver has choice of guessing left or right
+    
+![Deuce court](serve_deuce_court.png)
+
+* Ad-court
+    + Server has choice of servine left or right
+    + Receiver has choice of guessing left or right
+
+![Ad-court](serve_ad_court.png)
+
+The option that is ignored is the center serve (from either court), since that rarely occurs.
+
+For each game we would expect there to be an equilibrium point. For example, the deuce-court serve might look like this:
+
+
+```{r echo=FALSE, fig.align='center', fig.width=8, fig.height=6}
+
+# Model parameters
+serve_left.receive_left   <- .9; serve_left.receive_right  <- .6
+serve_right.receive_left  <- .7; serve_right.receive_right <- .8
+
+# Conflict Matrix:
+#   Receive
+#     column 1: left, column 2: right
+#   Serve
+#     row 1: left, row 2: right
+y <- c(serve_left.receive_left, serve_left.receive_right,
+       serve_right.receive_left,  serve_right.receive_right)
+conflict.matrix <- matrix(data=y, nrow = 2, byrow = TRUE)
+
+# Create data frame
+x <- c(0, 0, 1, 1)
+
+l <- c(rep("Receiver guesses right", 4))
+l[seq(1, 4, by=2)] <- "Receiver guesses left"
+
+df <- data.frame(x=x, y=y, line=l)
+
+# Equilibrium point
+d.r1 <- abs(diff(conflict.matrix[1,]))
+d.r2 <- abs(diff(conflict.matrix[2,]))
+d.c1 <- abs(diff(conflict.matrix[,1]))
+d.c2 <- abs(diff(conflict.matrix[,2]))
+serve_right.eq <- d.r1 / (d.r1 + d.r2)
+receive_right.eq <- d.c2 / (d.c1 + d.c2)
+
+ex.server <- as.numeric(conflict.matrix[,1]  %*% c(1 - serve_right.eq, serve_right.eq))
+
+# Plotting parameters
+b <- (1:5)*20/100
+ann_size <- 4
+
+p <- ggplot(df, aes(x=x, y=y)) + 
+  geom_rect(aes(xmin=0, xmax=1, ymin=0, ymax=1), fill="white", alpha=.2) + 
+  geom_line(aes(color=line), size=1.5) +
+  geom_point(size = 4) +
+  annotate("text", label = "Serve left\nGuess right",  
+           x=x[1], y=serve_left.receive_right,  hjust= 0.0, vjust=  1.3,
+           size=ann_size) +
+  annotate("text", label = "Serve left\nGuess left",   
+           x=x[2], y=serve_left.receive_left,   hjust= 0.0, vjust= -.3,
+           size=ann_size) +
+  annotate("text", label = "Serve right\nGuess left",  
+           x=x[3], y=serve_right.receive_left,  hjust= 1.1, vjust= 1.3,
+           size=ann_size) +
+  annotate("text", label = "Serve right\nGuess right", 
+           x=x[4], y=serve_right.receive_right, hjust= 1.1, vjust= -0.3,
+           size=ann_size) +
+  annotate("segment", x=0.05,    xend=serve_right.eq, y=ex.server, yend=ex.server, linetype=2) + 
+  annotate("segment", x=serve_right.eq, xend=serve_right.eq, y=0,         yend=ex.server, linetype=2) +
+  annotate("text", label=round(ex.server, 2), x=0, y=ex.server, hjust=.5) +
+  annotate("text", label=round(serve_right.eq, 2), x=serve_right.eq, y=0, vjust=1.5) +
+  ggtitle("Deuce-court Serve") +
+  xlab("Probability Server serves right") + 
+  scale_x_continuous(breaks=b) +
+  ylab("Probability point won by Server") +
+  scale_y_continuous(breaks=b) +
+  theme(plot.title = element_text(face="bold", size=20)) + 
+  scale_color_manual(name = "Receiver actions",
+                     values = c("#1b9e77", "#d95f02"))
+
+# Turn off clipping
+gt <- ggplot_gtable(ggplot_build(p))
+gt$layout$clip[gt$layout$name == "panel"] <- "off"
+plot(gt)
+
+```
+
+
+Let's create a simulation of this situation to look at a few important properties:
+
+```{r}
+# Simulation parameters
+n <- 10000
+
+# Serve left(0) or right(1)
+serve <- rbinom(n, 1, serve_right.eq)
+receive <- rbinom(n, 1, receive_right.eq)
+
+point.results <- data.frame(serve=serve, receive=receive, server.wins=NA)
+
+filter.serve_left.receive_left <-   point.results$serve == 0 & point.results$receive == 0
+filter.serve_left.receive_right <-  point.results$serve == 0 & point.results$receive == 1
+filter.serve_right.receive_left <-  point.results$serve == 1 & point.results$receive == 0
+filter.serve_right.receive_right <- point.results$serve == 1 & point.results$receive == 1
+
+point.results$server.wins[filter.serve_left.receive_left] <- 
+  rbinom(sum(filter.serve_left.receive_left), 1, serve_left.receive_left)
+
+point.results$server.wins[filter.serve_left.receive_right] <- 
+  rbinom(sum(filter.serve_left.receive_right), 1, serve_left.receive_right)
+
+point.results$server.wins[filter.serve_right.receive_left] <- 
+  rbinom(sum(filter.serve_right.receive_left), 1, serve_right.receive_left)
+
+point.results$server.wins[filter.serve_right.receive_right] <- 
+  rbinom(sum(filter.serve_right.receive_right), 1, serve_right.receive_right)
+
+```
+
+```{r}
+mean(point.results$server.wins[point.results$serve == 1])
+mean(point.results$server.wins[point.results$serve == 0])
+```
+
+
+
+
+
+
+
