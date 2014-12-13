@@ -113,14 +113,17 @@ def graph_construction(graph_info, user_dict, size=None):
 
 def plot_degree_distribution(g):
     ''' Given a graph, plot a histogram of in-degree values of all nodes. '''
+    # Get a dictionary of node -> indegree, extract just the values and sort
     degree = g.in_degree()
     in_degrees = np.asarray(degree.values())
     in_degrees.sort()
 
+    #  Create histogram from in degree values
     hist, bins = np.histogram(in_degrees, bins=20)
     width = 0.7 * (bins[1] - bins[0])
     center = (bins[:-1] + bins[1:]) / 2
 
+    # Make figure nice
     fig = plt.figure()
     fig.suptitle('In Degree Frequency Distribution', fontsize=14, fontweight='bold')
     ax = fig.add_subplot(111)
