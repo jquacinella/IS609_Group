@@ -7,6 +7,8 @@ output: html_document
 ```{r}
 library(ggplot2)
 library(reshape2)
+library(plyr)
+library(dplyr)
 ```
 
 Generate figures to help explain game theory analysis
@@ -17,13 +19,13 @@ We want to take a look at a tennis match from the perspective of game theory. In
 2. There are two distince scenarios that present two distince games:
 
 * Deuce-court
-    + Server has choice of servine left or right
+    + Server has choice of serving left or right
     + Receiver has choice of guessing left or right
     
 ![Deuce court](serve_deuce_court.png)
 
 * Ad-court
-    + Server has choice of servine left or right
+    + Server has choice of serving left or right
     + Receiver has choice of guessing left or right
 
 ![Ad-court](serve_ad_court.png)
@@ -36,18 +38,26 @@ For each game we would expect there to be an equilibrium point. For example, the
 ```{r echo=FALSE, fig.align='center', fig.width=8, fig.height=6}
 
 # Model parameters
-serve_left.receive_left   <- .9; serve_left.receive_right  <- .6
-serve_right.receive_left  <- .7; serve_right.receive_right <- .8
+sv_lf.rc_lf <- .9; sv_lf.rc_rt <- .65
+sv_rt.rc_lf <- .7; sv_rt.rc_rt <- .80
+
+model.prob <- c(sv_lf.rc_lf,   sv_lf.rc_rt,
+                sv_rt.rc_rt, sv_rt.rc_rt)
 
 # Conflict Matrix:
-#   Receive
-#     column 1: left, column 2: right
-#   Serve
-#     row 1: left, row 2: right
-y <- c(serve_left.receive_left, serve_left.receive_right,
-       serve_right.receive_left,  serve_right.receive_right)
-conflict.matrix <- matrix(data=y, nrow = 2, byrow = TRUE)
+# |             | Receive left | Receive Right |
+# |-------------|:------------:|:-------------:|
+# |  Serve Left |  sv_lf.rc_lf |  sv_lf.rc_rt  |
+# | Serve Right |  sv_rt.rc_lf |  sv_rt.rc_rt  |
 
+conflict.matrix <- matrix(data=model.prob, nrow = 2, byrow = TRUE)
+
+# Create data frame
+sv <- c(0, 0, 1, 1)
+rc <- c(0, 1, 0, 1)
+
+model.df <- data.frame(model.prob=model.prob, sv=sv, rc=rc)
+  
 # Create data frame
 x <- c(0, 0, 1, 1)
 
@@ -75,16 +85,16 @@ p <- ggplot(df, aes(x=x, y=y)) +
   geom_line(aes(color=line), size=1.5) +
   geom_point(size = 4) +
   annotate("text", label = "Serve left\nGuess right",  
-           x=x[1], y=serve_left.receive_right,  hjust= 0.0, vjust=  1.3,
+           x=x[1], y=sv_lf.rc_rt,  hjust= 0.0, vjust=  1.3,
            size=ann_size) +
   annotate("text", label = "Serve left\nGuess left",   
-           x=x[2], y=serve_left.receive_left,   hjust= 0.0, vjust= -.3,
+           x=x[2], y=sv_lf.rc_lf,   hjust= 0.0, vjust= -.3,
            size=ann_size) +
   annotate("text", label = "Serve right\nGuess left",  
-           x=x[3], y=serve_right.receive_left,  hjust= 1.1, vjust= 1.3,
+           x=x[3], y=sv_rt.rc_lf,  hjust= 1.1, vjust= 1.3,
            size=ann_size) +
   annotate("text", label = "Serve right\nGuess right", 
-           x=x[4], y=serve_right.receive_right, hjust= 1.1, vjust= -0.3,
+           x=x[4], y=sv_rt.rc_rt, hjust= 1.1, vjust= -0.3,
            size=ann_size) +
   annotate("segment", x=0.05,    xend=serve_right.eq, y=ex.server, yend=ex.server, linetype=2) + 
   annotate("segment", x=serve_right.eq, xend=serve_right.eq, y=0,         yend=ex.server, linetype=2) +
@@ -107,45 +117,205 @@ plot(gt)
 ```
 
 
-Let's create a simulation of this situation to look at a few important properties:
+From paper:
+
+Match 82: Wimbldn, Conners, McEnroe  
+
+Conners, Ad:   
+  Serves: L - 32, R - 46, Total - 48  
+  Points: L - 16, R - 32  
+  
+Pearson statisitc = 3.052  
+p-value = 0.081  
+
+Let's make sure I can match this calculation:  
+
+|         | Win    |  Lose |        |
+|---------|--------|-------|--------|
+| Serve L | **16** | 16    | **32** |
+| Serve R | 32     | 14    | **46** |
+|         | 48     | 30    | **78** |
 
 ```{r}
-# Simulation parameters
-n <- 10000
+values <- c(16, 16, 32, 14)
+m <- matrix(values, nrow=2, byrow=TRUE)
+chisq.test(m, correct=FALSE)
+```
 
-# Serve left(0) or right(1)
-serve <- rbinom(n, 1, serve_right.eq)
-receive <- rbinom(n, 1, receive_right.eq)
+These values match the paper
 
-point.results <- data.frame(serve=serve, receive=receive, server.wins=NA)
-
-filter.serve_left.receive_left <-   point.results$serve == 0 & point.results$receive == 0
-filter.serve_left.receive_right <-  point.results$serve == 0 & point.results$receive == 1
-filter.serve_right.receive_left <-  point.results$serve == 1 & point.results$receive == 0
-filter.serve_right.receive_right <- point.results$serve == 1 & point.results$receive == 1
-
-point.results$server.wins[filter.serve_left.receive_left] <- 
-  rbinom(sum(filter.serve_left.receive_left), 1, serve_left.receive_left)
-
-point.results$server.wins[filter.serve_left.receive_right] <- 
-  rbinom(sum(filter.serve_left.receive_right), 1, serve_left.receive_right)
-
-point.results$server.wins[filter.serve_right.receive_left] <- 
-  rbinom(sum(filter.serve_right.receive_left), 1, serve_right.receive_left)
-
-point.results$server.wins[filter.serve_right.receive_right] <- 
-  rbinom(sum(filter.serve_right.receive_right), 1, serve_right.receive_right)
+```{r}
+simulate.games <- function(sv_lf.rc_lf, 
+              					   sv_lf.rc_rt,
+            						   sv_rt.rc_lf,
+            						   sv_rt.rc_rt,
+            						   serve_right.actual,
+            						   receive_right.actual,
+            						   n.trials){
+  
+  # Serve left(0) or right(1)
+  serve <- rbinom(n.trials, 1, serve_right.actual)
+  receive <- rbinom(n.trials, 1, receive_right.actual)
+  
+  point.results <- data.frame(serve=serve, receive=receive, server.wins=NA)
+  
+  filter.sv_lf.rc_lf <-   point.results$serve == 0 & point.results$receive == 0
+  filter.sv_lf.rc_rt <-  point.results$serve == 0 & point.results$receive == 1
+  filter.sv_rt.rc_lf <-  point.results$serve == 1 & point.results$receive == 0
+  filter.sv_rt.rc_rt <- point.results$serve == 1 & point.results$receive == 1
+  
+  point.results$server.wins[filter.sv_lf.rc_lf] <- 
+   rbinom(sum(filter.sv_lf.rc_lf), 1, sv_lf.rc_lf)
+  
+  point.results$server.wins[filter.sv_lf.rc_rt] <- 
+   rbinom(sum(filter.sv_lf.rc_rt), 1, sv_lf.rc_rt)
+  
+  point.results$server.wins[filter.sv_rt.rc_lf] <- 
+   rbinom(sum(filter.sv_rt.rc_lf), 1, sv_rt.rc_lf)
+  
+  point.results$server.wins[filter.sv_rt.rc_rt] <- 
+   rbinom(sum(filter.sv_rt.rc_rt), 1, sv_rt.rc_rt)
+  
+  return(point.results)
+}
 
 ```
 
 ```{r}
-mean(point.results$server.wins[point.results$serve == 1])
-mean(point.results$server.wins[point.results$serve == 0])
+# Set parameters
+n.trials <- 1000
+
+use.eq <- TRUE
+if(use.eq){
+  serve_right.actual <- serve_right.eq
+  receive_right.actual <- receive_right.eq
+} else{
+  serve_right.actual <- 0
+  receive_right.actual <- 0
+}
+
+r1 <- simulate.games(sv_lf.rc_lf,
+                     sv_lf.rc_rt,
+                     sv_rt.rc_lf,
+                     sv_rt.rc_rt,
+                     serve_right.actual,
+                     receive_right.actual,
+                     n.trials)
+
+# Take a look at the results
+mean(r1$server.wins[r1$serve == 1])
+mean(r1$server.wins[r1$serve == 0])
+
+mean(r1$server.wins)
+
+#____________________Col 0 - Point lost | Col 1 - Point Won
+# Row 0 - Serve Left
+# Row 1 - Serve Right
+
+m <- table(r1$serve, r1$server.wins)
+
+chisq.test(m, correct=FALSE)
 ```
 
+What does a heat map of this look like?
+Let's look at a heat map of the serves expected win ratio for all combinations of serving left or right and all combinations of the receiver guessing left or right.
 
 
+```{r fig.width=8, fig.height=2.5}
 
+increment <- 0.025
+s <- seq(0, 1, increment)
+r <- seq(0, 1, increment)
 
+df <- data.frame(expand.grid(s, r))
+names(df) <- c("s", "r")
 
+f <- function(s, r, num.trials){
+  r <- simulate.games(sv_lf.rc_lf, 
+                      sv_lf.rc_rt,
+                      sv_rt.rc_lf,
+                      sv_rt.rc_rt,
+                      s, r, num.trials)
+  return(mean(r$server.wins))
+}
+
+n.trials <- c(100, 1000, 10000) # , 50000)
+# n.trials <- c(10, 50, 100)
+# n.trials <- c(100000)
+size.effect = data.frame()
+
+for(n.trials.value in n.trials){
+  df <- ddply(df, .(s, r), transform,
+            ev = f(s, r, n.trials.value), 2)
+  df$trials <- n.trials.value
+  size.effect <- plyr::join(size.effect, df, type="full")
+}
+
+ev.min <- min(size.effect$ev)
+ev.max <- max(size.effect$ev)
+b <- c(seq(from=ev.min,            to=ex.server - 0.005, length.out=5), 
+       seq(from=ex.server + 0.005, to=ev.max,           length.out=5))
+
+size.effect$ev.bin <- cut(size.effect$ev, breaks=b)
+
+ggplot(size.effect, aes(x=r, y=s)) + 
+  geom_tile(aes(fill=ev.bin)) + 
+  facet_grid(. ~ trials) +
+  scale_fill_brewer(palette = "YlGnBu")
+  
+
+```
+
+We can see that equilibrium play is achieved when the server serves 75% right and the receiver guesses 50% right. We can also see that we need to look at a lot of games to reduce noise.
+
+Since we can't observe which way the receiver is guessing we will use the pearson statistic as a surrogate. Looking at the chi squared value in the same manner we have:
+
+```{r fig.width=8, fig.height=2.5}
+
+increment <- 0.025
+s <- seq(0, 1, increment)
+r <- seq(0, 1, increment)
+
+df <- data.frame(expand.grid(s, r))
+names(df) <- c("s", "r")
+
+f <- function(s, r, num.trials){
+  r <- simulate.games(sv_lf.rc_lf, 
+                      sv_lf.rc_rt,
+                      sv_rt.rc_lf,
+                      sv_rt.rc_rt,
+                      s, r, num.trials)
+  #____________________Col 0 - Point lost | Col 1 - Point Won
+  # Row 0 - Serve Left
+  # Row 1 - Serve Right
+  
+  m <- table(r$serve, r$server.wins)
+  
+  return(chisq.test(m, correct=FALSE)$p.value)
+}
+
+n.trials <- c(100, 1000, 10000) # , 50000)
+# n.trials <- c(10, 50, 100)
+n.trials <- c(10000)
+size.effect = data.frame()
+
+for(n.trials.value in n.trials){
+  df <- ddply(df, .(s, r), mutate,
+            chi = f(s, r, n.trials.value), 2)
+  df$trials <- n.trials.value
+  size.effect <- plyr::join(size.effect, df, type="full")
+}
+
+# cap <- 4
+# size.effect$chi.capped <- size.effect$chi
+# size.effect$chi.capped[size.effect$chi > cap] <- cap + 1
+# size.effect$log.chi <- log(size.effect$chi)
+
+ggplot(size.effect, aes(x=r, y=s)) + 
+  geom_tile(aes(fill=chi)) + 
+  facet_grid(. ~ trials)
+#   scale_fill_brewer(palette = "YlGnBu")
+  
+
+```
 
