@@ -1,40 +1,47 @@
+import os
 import time
 import twitter
 import pickle
 from config import *
+import networkx as nx
+import matplotlib.pyplot as plt
 
-# Get the twitter API
-api = twitter.Api(consumer_key=CONSUMER_KEY,
-                      consumer_secret=CONSUMER_SECRET,
-                      access_token_key=ACCESS_TOKEN_KEY,
-                      access_token_secret=ACCESS_TOKEN_SECRET)
+followers = None
+if os.path.exists("followers"):
+  followers = pickle.load(open("followers", "rb"))
+else:
+  # Get the twitter API
+  api = twitter.Api(consumer_key=CONSUMER_KEY,
+                        consumer_secret=CONSUMER_SECRET,
+                        access_token_key=ACCESS_TOKEN_KEY,
+                        access_token_secret=ACCESS_TOKEN_SECRET)
 
-# Right now, Hilary Mason's tweet is hardcoded
-tweet_id=541746341295452160
+  # Right now, Hilary Mason's tweet is hardcoded
+  tweet_id=541746341295452160
 
-# Grab all the users who retweeted this tweet
-users = api.GetRetweeters(tweet_id)
+  # Grab all the users who retweeted this tweet
+  users = api.GetRetweeters(tweet_id)
 
-# Build a dictionary of retweeter id to a list of follower IDs, using Twitter's API
-# Note: we need to rate limit
-followers = { }
-followers_count = 0
-for user in users:
-    while True:
-        try:
-            print "User %d" % user
-            followers[user] = api.GetFollowerIDs(user_id=user)
-            break
-        except:
-            print "Sleeping ..."
-            time.sleep(60*5)
-            continue
-    
-    followers_count += len(followers[user])
-    print followers_count
+  # Build a dictionary of retweeter id to a list of follower IDs, using Twitter's API
+  # Note: we need to rate limit
+  followers = { }
+  followers_count = 0
+  for user in users:
+      while True:
+          try:
+              print "User %d" % user
+              followers[user] = api.GetFollowerIDs(user_id=user)
+              break
+          except:
+              print "Sleeping ..."
+              time.sleep(60*5)
+              continue
+      
+      followers_count += len(followers[user])
+      print followers_count
 
-# Save file for use in iPython notebook
-pickle.dump(followers, open("followers", "wb"), pickle.HIGHEST_PROTOCOL)
+  # Save file for use in iPython notebook
+  pickle.dump(followers, open("followers", "wb"), pickle.HIGHEST_PROTOCOL)
 
 
 #  Create new graph with tweet as first node
@@ -75,9 +82,11 @@ edge_labels = nx.get_edge_attributes(new_g,'type')
 colors = nx.get_node_attributes(new_g, 'color')
 
 # Create a networkx layout based on shells we created
-pos_shell = nx.shell_layout(g, nlist=[shell1, shell2, shell3])
+pos_shell = nx.shell_layout(new_g, nlist=[shell1, shell2, shell3])
 
 # Plot the graph
 plt.figure(figsize=(15, 15))
 nx.draw(new_g, pos_shell, arrows=True, node_size=900, node_color=colors.values())
 x = nx.draw_networkx_edge_labels(new_g, pos_shell, labels = edge_labels)
+plt.savefig('influence.png', facecolor='grey')
+plt.show()
