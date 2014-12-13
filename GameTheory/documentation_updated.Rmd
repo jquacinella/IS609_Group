@@ -462,13 +462,18 @@ sim.return <- function(probs, sv_rt.act, rc_rt.act, n.pts){
   # Calculations
   m <- table(r$sv, r$sv.wins)
   options(warn=-1)                          # suppress warnings from chisq.test
-  chi.test <- chisq.test(m, correct=FALSE)
+  chi.test.sv <- chisq.test(m, correct=FALSE)
+  
+  n <- table(r$rc, r$sv.wins)
+  chi.test.rc <- chisq.test(n, correct=FALSE)
   options(warn=0)                           # turn warnings back on
   
   # Return list
-  return.list <- list(ev = mean(r$sv.wins),
-                      chi = chi.test$statistic,
-                      pv = chi.test$p.value)
+  return.list <- list(ev     = mean(r$sv.wins),
+                      chi.sv = chi.test.sv$statistic,
+                      pv.sv  = chi.test.sv$p.value,
+                      chi.rc = chi.test.rc$statistic,
+                      pv.rc  = chi.test.rc$p.value)
   
   return(return.list)
 }
@@ -490,14 +495,15 @@ increment <- 1 / per.side
 
 # Number of games to simulate for each point in the grid
 # Different values depending on objective
-n.trials <- list("final"      = c(100, 1000, 10000, 50000),
-                 "draft"      = c(100, 1000, 5000, 10000),
-                 "fast"       = c(100, 300, 1000, 2000),
-                 "test.multi" = c(100, 150, 200), 
-                 "test.one"   = c(100),
-                 "test.long"  = c(50000))                     #~2 minutes
+n.trials <- list("final"        = c(100, 1000, 10000, 50000),
+                 "draft"        = c(100, 1000, 5000, 10000),
+                 "two_rows-one" = c(100, 300),
+                 "fast"         = c(100, 300, 1000, 2000),
+                 "test.multi"   = c(100, 150, 200), 
+                 "test.one"     = c(100),
+                 "test.long"    = c(50000))                     #~2 minutes
 
-current.run <- "fast"
+current.run <- "final"
 #------------------------------------------------------------
                  
 # Initialize result data frame
@@ -513,30 +519,24 @@ for(pts in n.trials[[current.run]]){
   df <- data.frame(expand.grid(sv.act, rc.act))
   names(df) <- c("sv.act", "rc.act")
   
-  df$ev <- NA
-  df$chi <- NA
-  df$pv <- NA
+  df$ev     <- NA
+  df$chi.sv <- NA
+  df$pv.sv  <- NA
+  df$chi.rc <- NA
+  df$chi.rc <- NA
   df$points <- pts
   
   # Run simulation for each point in grid
   for(r in 1:nrow(df)){
-    sim.list <- sim.return(model.df$prob, df$sv.act[r], df$rc.act[r], pts)
-    df$ev[r] <- sim.list$ev
-    df$chi[r] <- sim.list$chi
-    df$pv[r] <- sim.list$pv
+    sim.list     <- sim.return(model.df$prob, df$sv.act[r], df$rc.act[r], pts)
+    df$ev[r]     <- sim.list$ev
+    df$chi.sv[r] <- sim.list$chi.sv
+    df$pv.sv[r]  <- sim.list$pv.sv
+    df$chi.rc[r] <- sim.list$chi.rc
+    df$pv.rc[r]  <- sim.list$pv.rc
+    
   }
-  
-#   df <- ddply(df, .(sv.act, rc.act), transform,
-#               sim = sim.return(model.df$prob, sv.act, rc.act, pts))
-#   
-#   df <- ddply(df, x(sv.act, rc.act), transform,
-#               points = pts,
-#               ev = sim$ev,
-#               chi = sim$chi,
-#               pv = sim$pv)
-  
-  print("Joining simulation of points =")
-  print(pts)
+
   size.effect <- join(size.effect, df, type="full")
 }
 ```
@@ -571,15 +571,11 @@ We can see that equilibrium play is achieved when the server serves `r round(sv_
 
 Since we can't observe which way the receiver is guessing we need another measure that we *can* calculate, that will show us when the play is in equilibrium.
 
-## Pearson Chi Squared Test, Chi Squared
-
-The Pearson Chi Squared Test is a measure of independence. We note that if the players are playing at equilibrium, then the proportion of time we serve left and right should be independent of the number of points we win to the left and to the right. 
-
-Looking at the chi squared value in the same manner as expected value we have:
+## Pearson Chi Squared Test, Chi Squared - Serve Direction vs Point Outcome
 
 ```{r chi_heat_map, echo=FALSE, fig.width=11.5, fig.height=3.5}
 
-size.effect$chi.mod <- size.effect$chi
+size.effect$chi.mod <- size.effect$chi.sv
 size.effect$chi.mod[size.effect$chi.mod < 0.0001] <- 0.0001
 size.effect$chi.log <- log(size.effect$chi.mod)
 
@@ -595,14 +591,16 @@ ggplot(size.effect, aes(x=rc.act, y=sv.act)) +
 
 ```
 
-## Pearson Chi Squared Test, P-value
+The Pearson Chi Squared Test is a measure of independence. We note that if the players are playing at equilibrium, then the proportion of time the server serves left and right should be independent of the number of points won to the left and to the right. This is convenient, since we can measure both quantities. Unfortunately, this is only true when the receiver is playing optimally, as shown in the above figure. So we can use this method to determine the optimal play of the receiver, but not the server. The other problem with this method is that it is subject to a high number of false positives when the number of points is low. Since a typical match is less than 300 points, it is rare to have enough data to make a good estimate.
+
+## Pearson Chi Squared Test, P-value - Serve Direction vs Point Outcome
 
 We can also look at the p-value of the chi squared test, which should correlate:
 
 ```{r p-value_heat_map, echo=FALSE, fig.width=11.5, fig.height=3.5}
 
 ggplot(size.effect, aes(x=rc.act, y=sv.act)) + 
-  geom_tile(aes(fill=pv)) + 
+  geom_tile(aes(fill=pv.sv)) + 
   geom_vline(xintercept=rc_rt.eq, color="red") + 
   geom_hline(yintercept=sv_rt.eq, color="red") + 
   facet_grid(. ~ points) +
@@ -613,15 +611,64 @@ ggplot(size.effect, aes(x=rc.act, y=sv.act)) +
 
 ```
 
+## Pearson Chi Squared Test, Chi Squared - Receive Direction vs Point Outcome
+
+```{r chi_heat_map_rc, echo=FALSE, fig.width=11.5, fig.height=3.5}
+
+size.effect$chi.rc.mod <- size.effect$chi.rc
+size.effect$chi.rc.mod[size.effect$chi.mod < 0.0001] <- 0.0001
+size.effect$chi.rc.log <- log(size.effect$chi.rc.mod)
+
+ggplot(size.effect, aes(x=rc.act, y=sv.act)) + 
+  geom_tile(aes(fill=chi.rc.log)) + 
+  geom_vline(xintercept=rc_rt.eq, color="red") + 
+  geom_hline(yintercept=sv_rt.eq, color="red") + 
+  facet_grid(. ~ points) +
+  ggtitle("Chi Squared Statistic - Receive Direction vs Point Won (by Points Simulated)") +
+  xlab("Probability of Receiver Guessing Right as Opposed to Left") +
+  ylab("Probability of Server Serving Right") + 
+  labs(fill = "log(Chi Squared)")
+
+```
+
+This figure shows a very similar test. In this case, however, we are measuring the independence between the receivers choice of left vs right and the outcome of the point. Unfortunately, we can not use this for real world data since there is no way to know the receivers choice. It is also subject to the same issues with noise.
+
+## Pearson Chi Squared Test, P-value - Receive Direction vs Point Outcome
+
+```{r p-value_heat_map_receive, echo=FALSE, fig.width=11.5, fig.height=3.5}
+
+ggplot(size.effect, aes(x=rc.act, y=sv.act)) + 
+  geom_tile(aes(fill=pv.rc)) + 
+  geom_vline(xintercept=rc_rt.eq, color="red") + 
+  geom_hline(yintercept=sv_rt.eq, color="red") + 
+  facet_grid(. ~ points) +
+  ggtitle("Chi Squared P-value - Receive Direction vs Point Won (by Points Simulated)") +
+  xlab("Probability of Receiver Guessing Right as Opposed to Left") +
+  ylab("Probability of Server Serving Right") +
+  labs(fill = "P Value")
+
+```
+
+In this case, we are using the p-value from the test instead of the chi squared statistic, but it gives the same information.
+
 # Conclusions
 
-It's difficult to find good statistics on average points per match. From lots of searching we might guess an average of 60 points per set and a maximum of 5 sets which would give 300 points per game. If I'm counting correctly, the game we used has a total of 227 points. This is a long game so it seems reasonable than 300 is probably high. Looking at the noise in the chi squared statistic (many false positives) this does not seem to be an effective method of determining if equilibrium play was achieved.
+It's difficult to find good statistics on average points per match. From lots of searching we might guess an average of 60 points per set and a maximum of 5 sets which would give 300 - 400 points per match. Split that among the four game scenarios and we're around 100 points per scenario. If I'm counting correctly, the game we used has a total of 227 points. This is a long game so it seems reasonable than 300 is probably high. Then those 300-400 points get split among the four scenarios identified at the ouset. Looking at the noise in the chi squared statistic (many false positives) this does not seem to be an effective method of determining if equilibrium play was achieved.
+
+Things for further exploration:
+
+* Next steps that would be interesting to consider would be running a Bayesian analysis on the data to see what kind of error our measures have
+
+* It might be possible to determine equilibrium play in two steps from observable data. One, find the receivers equilibrium value. Two, use that value to calculate the expected value. Finally, use the expected value to determine the server's equilibrium value.
+
 
 # Appendix
 
 ## Validate Chi Squared Calculation
 
 From paper:
+Minimax Play at Wimbledon
+By Mark Walker and John Wooders
 
 Match 82: Wimbldn, Conners, McEnroe  
 
