@@ -6,6 +6,8 @@ import random
 import numpy as np
 
 def create_test_object(user_dict, size=3):
+    ''' Only used for debugging '''
+
     # Set some parameters
     count_options = [1, 2, 3, 4, 5]
     max_follows = 3
@@ -25,9 +27,6 @@ def create_test_object(user_dict, size=3):
         # Filter this so the node does not follow itself
         follows = [i for i in follows if i != current_id]
 
-        # test_object[current_id] = {'name': user_dict[current_id]['twit_ob'].name,
-        #                            'count': random.choice(count_options),
-        #                            'follows': follows}
         test_object[current_id] = {'name': user_dict[current_id]['name'],
                                    'count': random.choice(count_options),
                                    'follows': follows}
@@ -73,6 +72,7 @@ def graph_construction(graph_info, user_dict, size=None):
     # Find the in degree of each node
     degree = g.in_degree()
 
+    # Dump the object so we can use this graph in ipython notebook
     pickle.dump(g, open('graph_object', 'wb'), pickle.HIGHEST_PROTOCOL)
 
     # Plot graph with spring layout
@@ -86,7 +86,7 @@ def graph_construction(graph_info, user_dict, size=None):
     # Plot new graph with shell layout
     fig = plt.figure(figsize=(10, 10))
 
-    # Shell calculations
+    # Calculate which nodes goes into which shell
     shell1 = []; shell2 = []; shell3 = [];
     for uid in user_dict_filtered:
         if degree[uid] < 50:
@@ -95,8 +95,9 @@ def graph_construction(graph_info, user_dict, size=None):
             shell2.append(uid)
         elif degree[uid] >= 90:
             shell3.append(uid)
-    shells = [shell3, shell2, shell1]
-    pos_shell = nx.shell_layout(g, nlist=shells)
+    
+    # Create a networkx positioning based on these layers
+    pos_shell = nx.shell_layout(g, nlist=[shell3, shell2, shell1])
 
     # Draw graph and labels
     nx.draw(g, pos_shell, arrows=True, with_labels=False)#, node_size=[v * 4 for v in degree.values()])
@@ -106,7 +107,33 @@ def graph_construction(graph_info, user_dict, size=None):
     plt.savefig('shell_layout.png', facecolor='grey')
     plt.show()
     
+    # Return graph object
+    return g
 
+
+def plot_degree_distribution(g):
+    ''' Given a graph, plot a histogram of in-degree values of all nodes. '''
+    # Get a dictionary of node -> indegree, extract just the values and sort
+    degree = g.in_degree()
+    in_degrees = np.asarray(degree.values())
+    in_degrees.sort()
+
+    #  Create histogram from in degree values
+    hist, bins = np.histogram(in_degrees, bins=20)
+    width = 0.7 * (bins[1] - bins[0])
+    center = (bins[:-1] + bins[1:]) / 2
+
+    # Make figure nice
+    fig = plt.figure()
+    fig.suptitle('In Degree Frequency Distribution', fontsize=14, fontweight='bold')
+    ax = fig.add_subplot(111)
+    ax.set_xlabel('In Degree')
+    ax.set_ylabel('Frequency')
+
+    # Show / save the plot
+    plt.bar(center, hist, align='center', width=width)
+    plt.savefig('degree_dist.png', facecolor='grey')
+    plt.show()
 
 
 def main():
@@ -125,8 +152,8 @@ def main():
     else:
         graph_info = readobject('ds_community', dir_flag=False, alt_dir=object_location)
 
-    graph_construction(graph_info, user_dict, size=nodes_to_plot)
-
+    g = graph_construction(graph_info, user_dict, size=nodes_to_plot)
+    plot_degree_distribution(g)
 
 if __name__ == "__main__":
     main()
