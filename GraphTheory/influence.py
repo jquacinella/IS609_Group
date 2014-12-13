@@ -6,6 +6,7 @@ from config import *
 import networkx as nx
 import matplotlib.pyplot as plt
 
+# Either load the followers dict from disk, or generate it from Twitter
 followers = None
 if os.path.exists("followers"):
   followers = pickle.load(open("followers", "rb"))
