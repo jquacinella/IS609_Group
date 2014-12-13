@@ -130,7 +130,9 @@ def plot_degree_distribution(g):
     ax.set_xlabel('In Degree')
     ax.set_ylabel('Frequency')
 
+    # Show / save the plot
     plt.bar(center, hist, align='center', width=width)
+    plt.savefig('degree_dist.png', facecolor='grey')
     plt.show()
 
 
