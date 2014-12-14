@@ -14,7 +14,7 @@ tennis[is.na(tennis)] <- 0 #change NAs to 0
 tennis$ServeDir <- as.factor(ifelse(tennis$Left_FH==1, "L", "R")) #combine serve direction to one factor var
 str(tennis)
 
-#Function to compare win% on each service side - Chi-square test of equal proportions
+#Function to compare win% on each service side - Chi-square test and Fisher's Exact test
 pointGame <- function(tennis_data, server, court, serve_num=tennis_data$ServeNum, set=tennis_data$Set) {
   
   df <- subset(tennis_data, Server==server & Court==court & ServeNum==serve_num & Set==set)
@@ -23,15 +23,17 @@ pointGame <- function(tennis_data, server, court, serve_num=tennis_data$ServeNum
   serve_right <- sum(df$Right_BH)
   point_left <- sum(df[df$ServeDir=="L",]$PointWon)
   point_right <- sum(df[df$ServeDir=="R",]$PointWon)
+  m <- matrix(c(point_left, serve_left-point_left, point_right, serve_right-point_right), ncol=2, byrow=TRUE)
   
-  chi_sq <- prop.test(c(point_left, point_right), c(serve_left, serve_right))  
+  chi_sq <- chisq.test(m, corr=TRUE)  
   chisq_val <- round(chi_sq$statistic, 3)
   p_val <- round(chi_sq$p.value, 3)
+  fish_pval <- round(fisher.test(m)$p.val, 3)
   
   df2 <- data.frame(server=server, court=court, set=paste(unique(set),collapse=""), serve_num=paste(unique(serve_num),collapse=""), serve_left=serve_left, 
                     serve_right=serve_right, point_left=point_left, point_right=point_right, 
                     perc_winLeft=round((point_left/serve_left)*100, 1), perc_winRight=round((point_right/serve_right)*100, 1), 
-                    chisq_val=chisq_val, p_val=p_val)
+                    chisq_val=chisq_val, chisq_pval=p_val, fisher_pval=fish_pval)
   
   rownames(df2) <- NULL  
   return(df2)
@@ -155,61 +157,88 @@ result_allsets <- result_allsets[order(result_allsets$server, result_allsets$cou
 print(result_allsets)
 write.table(result_allsets, "tennis_results.csv", append=TRUE, col.names=FALSE, sep=",")
 
-#ROUGH, not working yet
-#--- 1ST SERVES, BY SERVER GAME --- 
 
-pointGame2 <- function(tennis_data, server, court, serve_num=tennis_data$ServeNum) {
+#--- 1ST SERVES, BY SERVER GAME --- 
+percSet <- function(df, server, serveNum, court, title) {
+
+  psg1d <- subset(df, Server==server & ServeNum==serveNum & Court==court)
   
-  df2 <- data.frame(server=character(), court=character(), set=character(), server_game_num=character(), serve_num=character(), serve_left=numeric(), 
-                    serve_right=numeric(), point_left=numeric(), point_right=numeric(), perc_winLeft=numeric(), perc_winRight=numeric(), 
-                    chisq_val=numeric(), p_val=numeric())
+  psg_agg <- ddply(psg1d, .(Set), summarise, serveLeft=sum(Left_FH), serveRight=sum(Right_BH), 
+                   perc_serveLeft=(sum(Left_FH)/(sum(Left_FH)+sum(Right_BH))), 
+                   perc_serveRight=(sum(Right_BH)/(sum(Left_FH)+sum(Right_BH))))
+  psg_agg$Set <- as.numeric(as.character(psg_agg$Set))
+  psg_agg <- psg_agg[sort(as.numeric(psg_agg$Set)),]
+  psg_agg
   
-  for (i in 1:length(unique(tennis_data[tennis_data$Server==server,]$ServerGameNum))) {
-    df <- subset(tennis_data, Server==server & Court==court & ServeNum==serve_num & ServerGameNum==i) 
-    
-    serve_left <- sum(df$Left_FH)
-    serve_right <- sum(df$Right_BH)
-    point_left <- ifelse(serve_left>0, sum(df[df$ServeDir=="L",]$PointWon), NA)
-    point_right <- ifelse(serve_right>0, sum(df[df$ServeDir=="R",]$PointWon), NA)
-    perc_winLeft <- ifelse(point_left != "NA", round((point_left/serve_left)*100, 1), NA)
-    perc_winRight <- ifelse(point_right != "NA", round((point_right/serve_right)*100, 1), NA)                    
-    str(serve_left)
-    str(serve_right)
-    str(point_left)
-    str(point_right)
-    str(perc_winLeft)
-    str(perc_winRight)
-    
-    chi_sq <- ifelse((serve_left>0) & (serve_right>0), prop.test(c(point_left, point_right), c(serve_left, serve_right)), NA)  
-    #chi_sq <- ifelse((serve_left>0) & (serve_right>0), print("yes"), print("no"))  
-    print(chi_sq)
-    chisq_val <- ifelse((chi_sq != "NA"), round(chi_sq$statistic, 3), NA)
-    p_val <- ifelse((chi_sq != "NA"), round(chi_sq$p.value, 3), NA)
-    
-    df2[i,] <- data.frame(server=server, court=court, set=df[i,]$Set, server_game_num=i, serve_num=paste(unique(serve_num),collapse=""), serve_left=serve_left, 
-                  serve_right=serve_right, point_left=point_left, point_right=point_right, 
-                  perc_winLeft=perc_winLeft, perc_winRight=perc_winRight, 
-                  chisq_val=chisq_val, p_val=p_val)
-  }  
-    
-  rownames(df2) <- NULL  
-  return(df2)
+  
+  psg_aggL <- ddply(psg1d, .(Set, ServeDir), summarise, serveLeft=sum(Left_FH), serveRight=sum(Right_BH), PointWon=sum(PointWon), perc_won=(sum(PointWon)/(sum(Left_FH)+sum(Right_BH))))
+  psg_aggL$Set <- as.numeric(as.character(psg_aggL$Set))
+  psg_aggL <- subset(psg_aggL, ServeDir=="L")
+  
+  psg_aggR <- ddply(psg1d, .(Set, ServeDir), summarise, serveLeft=sum(Left_FH), serveRight=sum(Right_BH), PointWon=sum(PointWon), perc_won=(sum(PointWon)/(sum(Left_FH)+sum(Right_BH))))
+  psg_aggR$Set <- as.numeric(as.character(psg_aggR$Set))
+  psg_aggR <- subset(psg_aggR, ServeDir=="R")
+  
+  
+  psg_agg3 <- merge(psg_agg, psg_aggL, by="Set")
+  psg_agg4 <- merge(psg_agg3, psg_aggR, by="Set")
+  
+  g <- ggplot(psg_agg4, aes(Set), group=c(perc_serveLeft, perc_won.x, perc_won.y)) + geom_line(aes(y=perc_serveLeft), size=1.5, colour="blue", linetype="dotted") + 
+    geom_line(aes(y=perc_won.x), size=1.5, colour="blue") +  
+    geom_line(aes(y=perc_won.y), size=1.5, colour="red")
+  
+  g <- g + ylab("Percent served, point won") + xlab("Set") + ggtitle(title) +
+    theme(axis.title.y=element_text(face="bold", size=14), axis.title.x=element_text(face="bold", size=14), 
+          plot.title=element_text(face="bold", size=16), axis.text.y=element_text(face="bold", size=12), 
+          axis.text.x=element_text(face="bold", size=12))
+  
+  return(g) 
+
 }
 
-write.csv(result_1serve_allsets, "tennis_results.csv")
+#Plot side-by-side graphs. Borrowed from...
+#http://www.cookbook-r.com/Graphs/Multiple_graphs_on_one_page_(ggplot2)
+multiplot <- function(..., plotlist=NULL, file, cols=2, layout=NULL) {
+  require(grid)
+  
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+  
+  numPlots = length(plots)
+  
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                     ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+  
+  if (numPlots==1) {
+    print(plots[[1]])
+    
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+    
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+      
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
 
-psd1g <- pointGame2(tennisIn, "PS", "D", "10")
-
-psg1d <- subset(tennisIn, Server=="PS" & ServeNum=="1" & Court=="D")
-library(plyr)
-
-psg1d_agg <- ddply(psg1d, .(ServerGameNum), summarise, serve_left=sum(Left_FH), point_left=sum(PointWon))
-psg1d_agg <- psg1d_agg[sort(as.numeric(psg1d_agg$ServerGameNum)),]
-psg1d_agg
-
-#Segment 1st serve all, 2nd serve all, All serves all, 1st serve by set, All serves by set
-#Time series
-#Predictive model
-#Serial independence
-#Compare to another low level match
+#1st serve results by set, graphs
+g_psd <- percSet(tennisIn, "PS", 1, "D", "Sampras Deuce court")
+g_psa <- percSet(tennisIn, "PS", 1, "A", "Sampras Ad court")
+multiplot(g_psd, g_psa)
+g_aad <- percSet(tennisIn, "AA", 1, "D", "Agassi Deuce court")
+g_aaa <- percSet(tennisIn, "AA", 1, "A", "Agassi Ad court")
+multiplot(g_aad, g_aaa)
 
