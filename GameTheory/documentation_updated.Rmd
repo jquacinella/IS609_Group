@@ -2,7 +2,7 @@
 title: "Documentation"
 author: "Aaron Palumbo"
 date: "Monday, December 08, 2014"
-output: html_document
+output: pdf_document
 ---
 ```{r include}
 library(ggplot2)
@@ -77,8 +77,7 @@ rc_rt.eq <- d.c1 / (d.c1 + d.c2)
 ex.sv <- as.numeric(conflict.matrix[,1]  %*% c(1 - sv_rt.eq, sv_rt.eq))
 ```
 
-```{r classic_game_theory_figure, echo=FALSE, fig.align='center'}
-# , fig.width=8, fig.height=6
+```{r classic_game_theory_figure, echo=FALSE, fig.align='center', fig.width=8, fig.height=6}
 
 # Plotting parameters
 b <- (1:5)*20/100
@@ -108,9 +107,13 @@ gt <- ggplot_gtable(ggplot_build(p))
 gt$layout$clip[gt$layout$name == "panel"] <- "off"
 
 # Display
-plot(gt)
 
+png(file="equilibrium.png", width=480, height=400)
+  plot(gt)
+dev.off()
 ```
+
+![Figure 3](equilibrium.png)
 
 $$ \text{Figure 3. Shows assumed values for this game.} $$
 
